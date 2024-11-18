@@ -1,0 +1,6 @@
+# Thanks to https://github.com/japaric/rust-cross/issues/42
+# and https://github.com/japaric/rust-cross?tab=readme-ov-file#c-cross-toolchain
+# and the official (yet deprecated) RPI toolchain https://github.com/raspberrypi/tools
+# cargo build --release --target=arm-unknown-linux-gnueabihf
+[target.arm-unknown-linux-gnueabihf]
+linker = "../../../rpi_tools/arm-bcm2708/arm-rpi-4.9.3-linux-gnueabihf/bin/arm-linux-gnueabihf-gcc"
