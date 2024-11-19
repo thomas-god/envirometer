@@ -1,5 +1,6 @@
 use cyw43_pio::PioSpi;
 use defmt::*;
+use dotenvy_macro::*;
 use embassy_executor::Spawner;
 use embassy_net::{Config, Stack, StackResources};
 use embassy_rp::bind_interrupts;
@@ -10,7 +11,6 @@ use embassy_rp::pio::{InterruptHandler, Pio};
 use embassy_rp::rtc::{DateTime, Rtc};
 use rand::RngCore;
 use static_cell::StaticCell;
-use dotenvy_macro::*;
 
 use core::fmt::write;
 use embassy_net::dns::DnsSocket;
@@ -186,40 +186,71 @@ async fn post_measure<'a, T, U>(
     T: TcpConnect + 'a,
     U: Dns + 'a,
 {
-    let url = "http://192.168.1.31:3000/measure";
+    let url = "http://192.168.1.81:3000/measure";
 
     info!("connecting to {}", &url);
 
+    let body = match build_body(measure, now) {
+        Ok(body) => body,
+        _ => {
+            warn!("Unable to build body, passing...");
+            return;
+        }
+    };
+
+    let request = match http_client.request(Method::POST, url).await {
+        Ok(request) => request,
+        Err(_) => {
+            warn!("Error when building the request, passing...");
+            return;
+        }
+    };
+    let mut request = request
+        .body(body.as_bytes())
+        .content_type(reqwless::headers::ContentType::ApplicationJson);
+
+    let mut rx_buffer = [0; 8192];
+    if (request.send(&mut rx_buffer).await).is_err() {
+        warn!("Unable to send request, passing...");
+    }
+}
+
+enum BuildBodyError {
+    CannotBuildBodyErr,
+}
+
+impl From<core::fmt::Error> for BuildBodyError {
+    fn from(_value: core::fmt::Error) -> Self {
+        Self::CannotBuildBodyErr
+    }
+}
+
+impl From<()> for BuildBodyError {
+    fn from(_: ()) -> Self {
+        Self::CannotBuildBodyErr
+    }
+}
+
+fn build_body(measure: Measure, now: DateTime) -> Result<String<100>, BuildBodyError> {
     let mut body: String<100> = String::new();
-    body.push('{').unwrap();
+
+    body.push('{')?;
     write(
         &mut body,
         format_args!(
             "\"timestamp\": \"{}-{}-{}T{}:{}:{}Z\",",
             now.year, now.month, now.day, now.hour, now.minute, now.second
         ),
-    )
-    .unwrap();
+    )?;
     write(
         &mut body,
         format_args!("\"temperature\": {},", measure.temperature),
-    )
-    .unwrap();
+    )?;
     write(
         &mut body,
         format_args!("\"humidity\": {}", measure.humidity),
-    )
-    .unwrap();
-    body.push('}').unwrap();
+    )?;
+    body.push('}')?;
 
-    let mut request = http_client
-        .request(Method::POST, &url)
-        .await
-        .unwrap()
-        .body(body.as_bytes())
-        .content_type(reqwless::headers::ContentType::ApplicationJson);
-    let mut rx_buffer = [0; 8192];
-    match request.send(&mut rx_buffer).await {
-        _ => {}
-    };
+    Ok(body)
 }
