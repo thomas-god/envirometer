@@ -2,6 +2,7 @@
 #![no_main]
 
 pub mod capteur;
+pub mod rtc;
 pub mod web;
 
 use crate::capteur::measure_task;

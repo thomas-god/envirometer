@@ -1,9 +1,9 @@
 use axum::{
-    routing::{get, post},
     http::StatusCode,
+    routing::{get, post},
     Json, Router,
 };
-use chrono::Local;
+use chrono::{DateTime, Datelike, Local, Utc};
 use serde::{Deserialize, Serialize};
 
 #[tokio::main]
@@ -16,7 +16,8 @@ async fn main() {
         // `GET /` goes to `root`
         .route("/", get(root))
         // `POST /users` goes to `create_user`
-        .route("/measure", post(log_measure));
+        .route("/measure", post(log_measure))
+        .route("/now", get(get_now));
 
     // run our app with hyper, listening globally on port 3000
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
@@ -25,10 +26,22 @@ async fn main() {
 
 // basic handler that responds with JSON payload
 async fn root() -> (StatusCode, Json<ApiResponse>) {
-    let response = ApiResponse {
-        datetime: 47
-    };
+    let response = ApiResponse { datetime: 47 };
     (StatusCode::OK, Json(response))
+}
+
+#[derive(Serialize)]
+struct NowResponse {
+    now: DateTime<Utc>,
+    weekday: u8,
+}
+
+async fn get_now() -> Json<NowResponse> {
+    let now: DateTime<Utc> = Utc::now();
+    Json(NowResponse {
+        now,
+        weekday: now.weekday() as u8,
+    })
 }
 
 async fn log_measure(
@@ -37,7 +50,12 @@ async fn log_measure(
     Json(payload): Json<Measure>,
 ) -> StatusCode {
     // insert your application logic here
-    println!("{}: T = {}, humidity = {}", payload.timestamp, payload.temperature, payload.humidity);
+    println!(
+        "{}: T = {}, humidity = {}",
+        payload.timestamp.with_timezone(&Local),
+        payload.temperature,
+        payload.humidity
+    );
 
     // this will be converted into a JSON response
     // with a status code of `201 Created`
@@ -45,10 +63,10 @@ async fn log_measure(
 }
 
 #[derive(Deserialize)]
-struct  Measure {
-    timestamp: chrono::DateTime<Local>,
+struct Measure {
+    timestamp: chrono::DateTime<Utc>,
     humidity: f64,
-    temperature: f64
+    temperature: f64,
 }
 
 // the output to our `create_user` handler

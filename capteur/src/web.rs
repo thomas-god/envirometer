@@ -23,6 +23,7 @@ use embassy_time::Timer;
 use embedded_nal_async::{Dns, TcpConnect};
 use heapless::String;
 
+use crate::rtc::init_rtc;
 use crate::{Measure, MEASURE_SIGNAL, NETWORK_STACK_SIGNAL};
 
 bind_interrupts!(struct Irqs {
@@ -144,7 +145,15 @@ pub async fn network_stack(spawner: Spawner, p: NetworkPeriphals) {
 
     let mut http_client = HttpClient::new_with_tls(&tcp_client, &dns_client, tls_config);
 
-    init_rtc(&mut http_client, &mut rtc).await;
+    match init_rtc(&mut http_client, &mut rtc).await {
+        Ok(_) => {
+            info!("RTC successfuly initialized.");
+        }
+        Err(err) => {
+            warn!("Error when initializing the RTC: {}", err);
+            return;
+        }
+    }
 
     NETWORK_STACK_SIGNAL.signal(true);
 
@@ -159,23 +168,6 @@ pub async fn network_stack(spawner: Spawner, p: NetworkPeriphals) {
         let measure = MEASURE_SIGNAL.wait().await;
         post_measure(&mut http_client, measure, now).await;
     }
-}
-
-async fn init_rtc<'a, T, U>(http_client: &mut HttpClient<'a, T, U>, rtc: &mut Rtc<'a, RTC>)
-where
-    T: TcpConnect + 'a,
-    U: Dns + 'a,
-{
-    rtc.set_datetime(DateTime {
-        year: 2024,
-        month: 11,
-        day: 14,
-        day_of_week: embassy_rp::rtc::DayOfWeek::Thursday,
-        hour: 20,
-        minute: 0,
-        second: 0,
-    })
-    .unwrap();
 }
 
 async fn post_measure<'a, T, U>(
