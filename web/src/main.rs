@@ -51,8 +51,9 @@ async fn log_measure(
 ) -> StatusCode {
     // insert your application logic here
     println!(
-        "{}: T = {}, humidity = {}",
+        "{} ({}): T = {}, humidity = {}",
         payload.timestamp.with_timezone(&Local),
+        payload.capteur_id,
         payload.temperature,
         payload.humidity
     );
@@ -67,6 +68,7 @@ struct Measure {
     timestamp: chrono::DateTime<Utc>,
     humidity: f64,
     temperature: f64,
+    capteur_id: String,
 }
 
 // the output to our `create_user` handler

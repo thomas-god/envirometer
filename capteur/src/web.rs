@@ -32,6 +32,7 @@ bind_interrupts!(struct Irqs {
 
 const WIFI_NETWORK: &str = dotenv!("WIFI_NETWORK");
 const WIFI_PASSWORD: &str = dotenv!("WIFI_PASSWORD");
+const CAPTEUR_ID: &str = dotenv!("CAPTEUR_ID");
 
 #[embassy_executor::task]
 pub async fn wifi_task(
@@ -236,11 +237,15 @@ fn build_body(measure: Measure, now: DateTime) -> Result<String<100>, BuildBodyE
     )?;
     write(
         &mut body,
-        format_args!("\"temperature\": {},", measure.temperature),
+        format_args!("\"temperature\": {:.2},", measure.temperature),
     )?;
     write(
         &mut body,
-        format_args!("\"humidity\": {}", measure.humidity),
+        format_args!("\"humidity\": {:.2},", measure.humidity),
+    )?;
+    write(
+        &mut body,
+        format_args!("\"capteur_id\": \"{}\"", CAPTEUR_ID)
     )?;
     body.push('}')?;
 
