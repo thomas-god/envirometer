@@ -26,3 +26,6 @@ Cargo.lock
 # Do not publish CYW43 firmware, it can be found here in the embassy repo :
 # https://github.com/embassy-rs/embassy/tree/main/cyw43-firmware
 cyw43-firmware
+
+# Tmp files for Docker secrets
+**/*.secret

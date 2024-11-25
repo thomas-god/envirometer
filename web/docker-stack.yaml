@@ -1,0 +1,57 @@
+services:
+
+  web:
+    image: envirometer:latest
+    ports:
+      - 80:3000
+    deploy:
+      update_config:
+        order: start-first
+    depends_on:
+      - db
+
+  db:
+    image: postgres:17
+    user: postgres
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB_FILE=/run/secrets/pg_db
+      - POSTGRES_USER_FILE=/run/secrets/pg_user
+      - POSTGRES_PASSWORD_FILE=/run/secrets/pg_password
+    secrets:
+      - pg_db
+      - pg_user
+      - pg_password
+    healthcheck:
+      test: [ "CMD", "pg_isready" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  grafana:
+    image: grafana/grafana-enterprise
+    ports:
+     - 3000:3000
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:3000" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    volumes:
+      - grafana-storage:/var/lib/grafana
+
+volumes:
+  db-data:
+  grafana-storage:
+
+secrets:
+  pg_db:
+    external: true
+  pg_user:
+    external: true
+  pg_password:
+    external: true
