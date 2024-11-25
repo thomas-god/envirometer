@@ -1,8 +1,18 @@
-FROM rust:latest
+# Build layer
+FROM rust:latest AS builder
 
-WORKDIR /usr/src/envirometer
-COPY . .
+WORKDIR /app
 
-RUN cargo install --path .
+COPY Cargo.toml /app
+COPY src/ /app/src
 
-CMD ["web"]
+RUN cargo build --release
+
+# Prod layer
+FROM gcr.io/distroless/cc
+COPY --from=builder /app/target/release/web /
+
+CMD ["./web"]
+
+# Sleep for debugging
+# CMD ["tail", "-f", "/dev/null"]
