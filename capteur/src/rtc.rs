@@ -1,11 +1,15 @@
+use core::fmt::write;
+use core::str::Utf8Error;
 use defmt::*;
-
-use core::str::{from_utf8, Utf8Error};
+use dotenvy_macro::*;
 use embassy_rp::peripherals::RTC;
 use embassy_rp::rtc::{DateTime, DayOfWeek, Rtc, RtcError};
 use embedded_nal_async::{Dns, TcpConnect};
+use heapless::String;
 use reqwless::{client::HttpClient, request::Method};
 use serde::Deserialize;
+
+const API_URL: &str = dotenv!("API_URL");
 
 #[derive(Deserialize, Debug, Format)]
 struct ApiResponse<'a> {
@@ -25,6 +29,12 @@ pub enum RTCInitError {
 impl From<reqwless::Error> for RTCInitError {
     fn from(value: reqwless::Error) -> Self {
         warn!("{}", value);
+        Self::APIError
+    }
+}
+
+impl From<core::fmt::Error> for RTCInitError {
+    fn from(_: core::fmt::Error) -> Self {
         Self::APIError
     }
 }
@@ -90,9 +100,10 @@ where
     T: TcpConnect + 'a,
     U: Dns + 'a,
 {
-    let url = "http://192.168.1.81:3000/now";
+    let mut url: String<100> = String::new();
+    write(&mut url, format_args!("{API_URL}/now"))?;
 
-    let mut request = match http_client.request(Method::GET, url).await {
+    let mut request = match http_client.request(Method::GET, &url).await {
         Ok(request) => request,
         Err(err) => {
             warn!("Error when building the request, passing... {}", err);
@@ -101,15 +112,13 @@ where
     };
 
     let mut rx_buffer = [0; 8192];
-    let body = from_utf8(
-        request
-            .send(&mut rx_buffer)
-            .await?
-            .body()
-            .read_to_end()
-            .await?,
-    )?;
-    let response = match serde_json_core::de::from_slice::<ApiResponse>(body.as_bytes()) {
+    let body = request
+        .send(&mut rx_buffer)
+        .await?
+        .body()
+        .read_to_end()
+        .await?;
+    let response = match serde_json_core::de::from_slice::<ApiResponse>(body) {
         Ok((output, _)) => {
             info!("Api response: {}", output);
             output

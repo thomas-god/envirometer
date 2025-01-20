@@ -33,6 +33,7 @@ bind_interrupts!(struct Irqs {
 const WIFI_NETWORK: &str = dotenv!("WIFI_NETWORK");
 const WIFI_PASSWORD: &str = dotenv!("WIFI_PASSWORD");
 const CAPTEUR_ID: &str = dotenv!("CAPTEUR_ID");
+const API_URL: &str = dotenv!("API_URL");
 
 #[embassy_executor::task]
 pub async fn wifi_task(
@@ -179,9 +180,8 @@ async fn post_measure<'a, T, U>(
     T: TcpConnect + 'a,
     U: Dns + 'a,
 {
-    let url = "http://192.168.1.81:3000/measure";
-
-    info!("connecting to {}", &url);
+    let mut url: String<100> = String::new();
+    let _ = write(&mut url, format_args!("{API_URL}/measure"));
 
     let body = match build_body(measure, now) {
         Ok(body) => body,
@@ -191,7 +191,7 @@ async fn post_measure<'a, T, U>(
         }
     };
 
-    let request = match http_client.request(Method::POST, url).await {
+    let request = match http_client.request(Method::POST, &url).await {
         Ok(request) => request,
         Err(_) => {
             warn!("Error when building the request, passing...");
@@ -245,7 +245,7 @@ fn build_body(measure: Measure, now: DateTime) -> Result<String<100>, BuildBodyE
     )?;
     write(
         &mut body,
-        format_args!("\"capteur_id\": \"{}\"", CAPTEUR_ID)
+        format_args!("\"capteur_id\": \"{}\"", CAPTEUR_ID),
     )?;
     body.push('}')?;
 
