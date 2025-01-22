@@ -11,6 +11,7 @@ services:
       - db
     environment:
       - PSQL_HOST=db
+      - PSQL_PORT=5432
       - PSQL_USER_FILE=/run/secrets/pg_user
       - PSQL_PASSWORD_FILE=/run/secrets/pg_password
       - PSQL_DB_FILE=/run/secrets/pg_db

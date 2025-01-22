@@ -14,7 +14,7 @@ services:
     environment:
       - PSQL_HOST=db
       - PSQL_USER=local
-      - PSQL_PWD=local_pwd
+      - PSQL_PASSWORD=local_pwd
       - PSQL_DB=app
 
   db:

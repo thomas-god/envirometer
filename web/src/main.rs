@@ -7,8 +7,11 @@ use axum::{
     Json, Router,
 };
 use chrono::{DateTime, Datelike, Local, Utc};
+use env::load_database_configuration;
 use serde::{Deserialize, Serialize};
 use sqlx::{postgres::PgPoolOptions, Pool, Postgres};
+
+mod env;
 
 struct AppState {
     db_pool: Pool<Postgres>,
@@ -30,16 +33,10 @@ async fn main() -> Result<(), sqlx::Error> {
 
 pub async fn build_app() -> Router {
     // Create connection pool to DB and run migrations
-    let psql_host = dotenvy::var("PSQL_HOST").expect("PSQL_HOST not found");
-    let psql_port = dotenvy::var("PSQL_PORT").expect("PSQL_PORT not found");
-    let psql_user = dotenvy::var("PSQL_USER").expect("PSQL_USER not found");
-    let psql_pwd = dotenvy::var("PSQL_PWD").expect("PSQL_PWD not found");
-    let psql_db = dotenvy::var("PSQL_DB").expect("PSQL_DB not found");
-    let url = format!("postgres://{psql_user}:{psql_pwd}@{psql_host}:{psql_port}/{psql_db}");
-    println!("DB url: {url}");
+    let database_config = load_database_configuration().expect("Unable to load DB info");
     let pool = PgPoolOptions::new()
         .max_connections(5)
-        .connect(url.as_str())
+        .connect(database_config.url().as_str())
         .await
         .expect("Unable to create connection pool to DB");
     sqlx::migrate!()
