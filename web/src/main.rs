@@ -1,27 +1,60 @@
+use std::sync::Arc;
+
 use axum::{
+    extract::State,
     http::StatusCode,
     routing::{get, post},
     Json, Router,
 };
 use chrono::{DateTime, Datelike, Local, Utc};
 use serde::{Deserialize, Serialize};
+use sqlx::{postgres::PgPoolOptions, Pool, Postgres};
+
+struct AppState {
+    db_pool: Pool<Postgres>,
+}
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), sqlx::Error> {
     // initialize tracing
     tracing_subscriber::fmt::init();
-
-    // build our application with a route
-    let app = Router::new()
-        // `GET /` goes to `root`
-        .route("/", get(root))
-        // `POST /users` goes to `create_user`
-        .route("/measure", post(log_measure))
-        .route("/now", get(get_now));
+    println!("Starting application");
 
     // run our app with hyper, listening globally on port 3000
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    let app = build_app().await;
     axum::serve(listener, app).await.unwrap();
+
+    Ok(())
+}
+
+pub async fn build_app() -> Router {
+    // Create connection pool to DB and run migrations
+    let psql_host = dotenvy::var("PSQL_HOST").expect("PSQL_HOST not found");
+    let psql_port = dotenvy::var("PSQL_PORT").expect("PSQL_PORT not found");
+    let psql_user = dotenvy::var("PSQL_USER").expect("PSQL_USER not found");
+    let psql_pwd = dotenvy::var("PSQL_PWD").expect("PSQL_PWD not found");
+    let psql_db = dotenvy::var("PSQL_DB").expect("PSQL_DB not found");
+    let url = format!("postgres://{psql_user}:{psql_pwd}@{psql_host}:{psql_port}/{psql_db}");
+    println!("DB url: {url}");
+    let pool = PgPoolOptions::new()
+        .max_connections(5)
+        .connect(url.as_str())
+        .await
+        .expect("Unable to create connection pool to DB");
+    sqlx::migrate!()
+        .run(&pool)
+        .await
+        .expect("Unable to run migrations against DB");
+    println!("DB migrations done");
+
+    // build our application with a route
+    let app_state = Arc::new(AppState { db_pool: pool });
+    Router::new()
+        .route("/", get(root))
+        .route("/measure", post(log_measure))
+        .route("/now", get(get_now))
+        .with_state(app_state)
 }
 
 // basic handler that responds with JSON payload
@@ -45,8 +78,7 @@ async fn get_now() -> Json<NowResponse> {
 }
 
 async fn log_measure(
-    // this argument tells axum to parse the request body
-    // as JSON into a `CreateUser` type
+    State(state): State<Arc<AppState>>,
     Json(payload): Json<Measure>,
 ) -> StatusCode {
     // insert your application logic here
@@ -57,10 +89,19 @@ async fn log_measure(
         payload.temperature,
         payload.humidity
     );
-
-    // this will be converted into a JSON response
-    // with a status code of `201 Created`
-    StatusCode::ACCEPTED
+    match sqlx::query(
+        "INSERT INTO t_measures (timestamp, capteur, temperature, humidity) VALUES ($1, $2, $3, $4)",
+    )
+    .bind(payload.timestamp)
+    .bind(payload.capteur_id)
+    .bind(payload.temperature)
+    .bind(payload.humidity)
+    .execute(&state.db_pool)
+    .await
+    {
+        Ok(_) => StatusCode::CREATED,
+        Err(_) => StatusCode::BAD_REQUEST,
+    }
 }
 
 #[derive(Deserialize)]
@@ -75,4 +116,42 @@ struct Measure {
 #[derive(Serialize)]
 struct ApiResponse {
     datetime: u8,
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::build_app;
+    use axum::{
+        body::Body,
+        http::{self, Request, StatusCode},
+    };
+    use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn test_log_measure() {
+        let app = build_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method(http::Method::POST)
+                    .uri("/measure")
+                    .header(http::header::CONTENT_TYPE, mime::APPLICATION_JSON.as_ref())
+                    .body(Body::from(String::from(
+                        r#"
+                    {
+                    "timestamp": "2025-01-22T18:07:55+0000",
+                    "capteur_id": "test",
+                    "temperature": 12,
+                    "humidity": 87
+                    }
+                    "#,
+                    )))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+    }
 }
