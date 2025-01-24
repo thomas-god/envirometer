@@ -1,0 +1,36 @@
+services:
+  db:
+    image: postgres:17
+    user: postgres
+    ports:
+      - 6666:5432
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=app
+      - POSTGRES_USER=local
+      - POSTGRES_PASSWORD=local_pwd
+    healthcheck:
+      test: [ "CMD", "pg_isready" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  grafana:
+    image: grafana/grafana-enterprise
+    ports:
+     - 3000:3000
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:3000" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    volumes:
+      - grafana-storage:/var/lib/grafana
+
+volumes:
+  db-data:
+  grafana-storage:
