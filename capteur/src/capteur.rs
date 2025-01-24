@@ -1,4 +1,4 @@
-use am2301::measure_once;
+use am2301::{measure_once_timeout, Measure as _Measure};
 use defmt::*;
 use embassy_futures::join::join;
 use embassy_rp::gpio::Flex;
@@ -23,8 +23,11 @@ pub async fn measure_task(pin: PIN_21) -> ! {
 
     loop {
         let start = Instant::now();
-        match measure_once(&mut pin).await {
-            Ok((humidity, temperature)) => {
+        match measure_once_timeout(&mut pin).await {
+            Ok(_Measure {
+                humidity,
+                temperature,
+            }) => {
                 MEASURE_SIGNAL.signal(Measure {
                     temperature,
                     humidity,
